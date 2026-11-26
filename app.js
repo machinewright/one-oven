@@ -70,7 +70,7 @@ function bindSettings() {
     if (e.checked && menu.ovens.length < 2) menu.ovens.push({ name: 'Second oven', shelves: 1 });
     if (!e.checked) menu.ovens = menu.ovens.slice(0, 1);
     menu.ovens[0].name = menu.ovens.length > 1 ? 'Main oven' : 'Oven';
-    renderSettings();
+    renderSettings(); renderDishes();
   });
   on('#shelves2', (e) => { if (menu.ovens[1]) menu.ovens[1].shelves = clampInt(e.value, 1, 6, 1); });
   on('#rings', (e) => { menu.rings = clampInt(e.value, 0, 8, 4); });
@@ -122,7 +122,7 @@ function summaryText(d) {
     if (s.kind === 'rest') return `rest ${m}`;
     return `wait ${m}`;
   });
-  return parts.join(' → ') + (d.readyBy ? ` · made ahead, ready by ${d.readyBy}` : (d.hold ? ` · keeps warm ${d.hold} min` : '') + (d.serveAt ? ` · served +${d.serveAt} min` : '')) + (d.top ? ' · matters most' : '') + (d.off ? ' · left out' : '');
+  return parts.join(' → ') + (d.readyBy ? ` · made ahead, ready by ${d.readyBy}` : (d.hold ? ` · keeps warm ${d.hold} min` : '') + (d.serveAt ? ` · served +${d.serveAt} min` : '')) + (menu.ovens.length > 1 && Number.isInteger(d.oven) ? (d.oven ? ' · second oven' : ' · main oven') : '') + (d.top ? ' · matters most' : '') + (d.off ? ' · left out' : '');
 }
 function dishHTML(d, i) {
   const later = d.serveAt ?? 0;
@@ -138,6 +138,7 @@ function dishHTML(d, i) {
       <label class="fld">Served <select class="f-later">${opts(withCur(LATER, later), d.readyBy ? -1 : later, (v) => (v ? `${v} min after the main course` : 'with the main course'))}<option value="-1"${d.readyBy ? ' selected' : ''}>made ahead, ready by…</option></select></label>
       ${d.readyBy ? `<label class="fld">ready by <input class="f-readyby" type="time" step="300" value="${esc(d.readyBy)}"></label>`
         : `<label class="fld">Once done, it can be kept warm <select class="f-hold">${opts(withCur(HOLDS, d.hold ?? 0), d.hold ?? 0, (v) => (v ? `up to ${v} min` : 'no, serve at once'))}</select></label>`}
+      ${menu.ovens.length > 1 && d.steps.some((s) => s.kind === 'oven') ? `<label class="fld">Oven <select class="f-oven">${[[-1, 'either'], [0, 'main oven only'], [1, 'second oven only']].map(([v, l]) => `<option value="${v}"${(d.oven ?? -1) === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
       <label class="chk"><input class="f-exact" type="checkbox"${d.exact ? ' checked' : ''}> exact temperature (baking)</label>
       <label class="chk"><input class="f-top" type="checkbox"${d.top ? ' checked' : ''}> matters most (other dishes give way first)</label>
       <label class="chk"><input class="f-off" type="checkbox"${d.off ? ' checked' : ''}> leave out</label>
@@ -178,6 +179,7 @@ function bindDishes() {
     else if (c.contains('f-readyby')) { if (el.value) d.readyBy = el.value; else return; }
     else if (c.contains('f-exact')) d.exact = el.checked;
     else if (c.contains('f-top')) d.top = el.checked;
+    else if (c.contains('f-oven')) { const v = +el.value; if (v < 0) delete d.oven; else d.oven = v; }
     else if (c.contains('f-off')) { d.off = el.checked; dEl.classList.toggle('off', d.off); }
     else if (s) {
       if (c.contains('f-kind')) {
@@ -307,7 +309,7 @@ function whyText(w) {
   if (w.kind === 'preheat') return 'There isn’t enough time between “kitchen free from” and serving to heat the oven (15 min) and cook it. ';
   if (w.kind === 'hob') return `To be ready on time it needs a hob ring from ${at}, but they're all taken (${them}). `;
   if (w.kind === 'hands') return `To be ready on time it needs you from ${at}, but you're busy with ${them}. `;
-  if (w.kind === 'shelves-total') return 'It needs more shelves than your oven has. ';
+  if (w.kind === 'shelves-total') return `It needs more shelves than ${lastP.ovens.length > 1 ? 'the oven it may use' : 'your oven'} has. `;
   if (w.kind === 'start') return 'It takes longer than the time between “kitchen free from” and serving. ';
   return '';
 }

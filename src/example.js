@@ -51,7 +51,8 @@ export function toProblem(m) {
         hold = Math.max(0, before + serveAt);
         holdWeight = 0.02;
       }
-      return { name: d.name, hold, holdWeight, serveAt, exact: !!d.exact, off: !!d.off, weight: d.top ? TOP_WEIGHT : 1, steps: d.steps.map((s) => ({ ...s })) };
+      const pin = Number.isInteger(d.oven) && d.oven >= 0 && d.oven < m.ovens.length && m.ovens.length > 1;
+      return { name: d.name, hold, holdWeight, serveAt, exact: !!d.exact, off: !!d.off, weight: d.top ? TOP_WEIGHT : 1, steps: d.steps.map((s) => (s.kind === 'oven' && pin ? { ...s, ovens: [d.oven] } : { ...s })) };
     }),
   };
 }

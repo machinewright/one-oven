@@ -388,6 +388,7 @@ export function verify(result) {
     if (opt.dropped) return;
     const ovensUsed = new Set(opt.steps.filter((st, k) => dish.steps[k].kind === 'oven').map((st) => st.oven));
     if (ovensUsed.size > 1) errs.push(`${dish.name}: moves between ovens`);
+    opt.steps.forEach((st, k) => { const a = dish.steps[k].ovens; if (dish.steps[k].kind === 'oven' && a && !a.includes(st.oven)) errs.push(`${dish.name}: step ${k} in an oven it isn't allowed in`); });
     if (opt.d < dish.serve - dish.hold - dish.extraHold) errs.push(`${dish.name}: waits too long`);
     if (opt.d > dish.serve) errs.push(`${dish.name}: done at ${opt.d}, serve ${dish.serve}`);
     opt.steps.forEach((st, k) => {
@@ -491,6 +492,7 @@ function sameTarget(a, b) {
 // Returns { [activeIndex]: { kind: 'shelves'|'temp'|'hob'|'hands'|'start', t, oven, temp, need, users: [names] } }
 function explainDrops(P, active, lists, best) {
   const why = {};
+  const fits = (s) => P.ovens.some((o, k) => (!s.ovens || s.ovens.includes(k)) && o.shelves >= s.shelves);
   const state = new State(P);
   best.chosen.forEach((o) => { if (!o.dropped) state.apply(o); });
   best.chosen.forEach((o, i) => {
@@ -499,6 +501,7 @@ function explainDrops(P, active, lists, best) {
     if (!pref) {
       const d = active[i];
       const span = d.steps.reduce((a, s) => a + s.len, 0);
+      if (d.steps.some((s) => s.kind === 'oven' && !fits(s))) { why[i] = { kind: 'shelves-total', users: [] }; return; }
       why[i] = { kind: span <= d.serve && d.steps.some((s) => s.kind === 'oven') ? 'preheat' : 'start' };
       return;
     }
@@ -506,7 +509,7 @@ function explainDrops(P, active, lists, best) {
     if (!c) { // conflicts with itself: needs more of something than the kitchen has
       const d = active[i];
       const kind = d.steps.some((s) => s.kind === 'hob' && s.rings > P.rings) ? 'hob'
-        : d.steps.some((s) => s.kind === 'oven' && s.shelves > Math.max(...P.ovens.map((o) => o.shelves))) ? 'shelves-total'
+        : d.steps.some((s) => s.kind === 'oven' && !fits(s)) ? 'shelves-total'
           : d.steps.some((s) => s.hands) && P.cooks < 1 ? 'hands' : 'self';
       why[i] = { kind, users: [] }; return;
     }

@@ -54,3 +54,26 @@ test('same menu, same plan (node limit, not time)', () => {
   const a = solve(toProblem(EXAMPLE), { nodeLimit: 3000 }), b = solve(toProblem(EXAMPLE), { nodeLimit: 3000 });
   assert.equal(JSON.stringify(a.best.chosen.map((o) => o.steps)), JSON.stringify(b.best.chosen.map((o) => o.steps)));
 });
+
+test('a dish pinned to one oven stays there; pinning to a too-small oven gives the shelf reason', () => {
+  const menu = {
+    serve: '18:00', from: '13:00', unit: 'C', ovens: [{ shelves: 3 }, { shelves: 1 }], rings: 4, cooks: 1,
+    dishes: [
+      { name: 'Turkey', oven: 0, steps: [{ kind: 'oven', min: 180, temp: 180, shelves: 2 }, { kind: 'rest', min: 30 }] },
+      { name: 'Pie', oven: 1, exact: true, steps: [{ kind: 'oven', min: 50, temp: 175 }] },
+      { name: 'Rolls', steps: [{ kind: 'oven', min: 15, temp: 200 }] },
+    ],
+  };
+  const r = solve(toProblem(menu));
+  assert.ok(r.ok); assert.deepEqual(verify(r), []);
+  const at = Object.fromEntries(r.active.map((d, i) => [d.name, r.best.chosen[i]]));
+  assert.ok(at.Turkey.steps[0].oven === 0 && at.Pie.steps[0].oven === 1);
+  // a pin is ignored once the second oven is switched off
+  const one = solve(toProblem({ ...menu, ovens: [{ shelves: 3 }] }));
+  assert.ok(one.ok && verify(one).length === 0 && one.best.chosen.every((c) => !c.dropped));
+  // turkey (2 shelves) pinned to the 1-shelf second oven: it can't go in, and the reason says shelves
+  const bad = solve(toProblem({ ...menu, dishes: menu.dishes.map((d) => (d.name === 'Turkey' ? { ...d, oven: 1 } : d)) }));
+  const ti = bad.active.findIndex((d) => d.name === 'Turkey');
+  assert.ok(bad.best.chosen[ti].dropped);
+  assert.equal(bad.best.why[ti].kind, 'shelves-total');
+});

@@ -103,3 +103,28 @@ test('marking Yorkshire puddings "matters most" moves their compromise onto othe
   assert.ok(top.best.chosen.every((c) => !c.dropped));
   assert.deepEqual(verify(top), []);
 });
+
+test('dishes pinned to one oven: optimum equals brute force, verify checks the pin', () => {
+  const r = rng(23);
+  let n = 0;
+  for (let k = 0; k < 40 && n < 15; k++) {
+    const p = randomProblem(r);
+    if (p.ovens.length < 2) continue;
+    n++;
+    p.dishes = p.dishes.slice(0, 3);
+    p.dishes.forEach((d) => { d.steps = d.steps.slice(0, 2); });
+    const pin = Math.floor(r() * 2);
+    p.dishes[0].steps.forEach((s) => { if (s.kind === 'oven') s.ovens = [pin]; });
+    const res = solve(p);
+    assert.ok(Math.abs(res.best.cost - bruteForce(p)) < 1e-6, `case ${k}`);
+    assert.deepEqual(verify(res), []);
+    const o = res.best.chosen[0];
+    if (!o.dropped) p.dishes[0].steps.forEach((s, j) => { if (s.kind === 'oven') assert.equal(o.steps[j].oven, pin); });
+    // tamper: move the pinned dish to the other oven; verify must object
+    if (!o.dropped && p.dishes[0].steps.some((s) => s.kind === 'oven')) {
+      const t = structuredClone(res.best); t.chosen[0].steps.forEach((st, j) => { if (p.dishes[0].steps[j].kind === 'oven') st.oven = 1 - pin; });
+      assert.ok(verify({ ...res, best: t }).some((e) => e.includes("isn't allowed")));
+    }
+  }
+  assert.ok(n >= 5);
+});
