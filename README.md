@@ -18,7 +18,8 @@ When it can't all fit, it says exactly which compromise it made and why.
   are priced options inside the same search: waiting longer than allowed, cooking 10 or 20 °C off the recipe, or leaving a
   dish out. The result is the plan with the smallest total price (proven optimal for small menus; best found in 1.5 s
   otherwise).
-- Tests (`node --test test/`) check the search against brute force on hundreds of random small menus, check every plan
+- Tests (`node --test test/`) check the search against brute force on hundreds of random small menus and against an
+  independent oracle written from the rules (it enumerates raw start times and shares no code), check every plan
   with an independent verifier, and check that the example (olive magazine's published Christmas timeline) is reproduced
   to the minute.
 
