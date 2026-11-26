@@ -32,7 +32,7 @@ export function normalise(problem) {
     const steps = d.steps.map((s) => {
       const kind = s.kind ?? 'other';
       const len = slots(s.min);
-      const st = { kind, len, maxLen: Math.max(len, slots(s.max ?? s.min)), wait: slots(s.wait ?? 0), hands: !!s.hands,
+      const st = { kind, len, maxLen: Math.max(len, slots(s.max ?? s.min)), wait: slots(s.wait ?? 0), hands: kind === 'prep' || (kind === 'hob' && !!s.hands),
         label: s.label ?? '' };
       if (kind === 'oven') {
         const t = s.temp;
@@ -45,7 +45,7 @@ export function normalise(problem) {
       return st;
     }).filter((s) => s.len > 0);
     const soft = p.soft !== false;
-    return { name: d.name ?? `Dish ${di + 1}`, serve, hold: slots(d.hold ?? 0), steps, weight: d.weight ?? 1,
+    return { index: di, name: d.name ?? `Dish ${di + 1}`, serve, hold: slots(d.hold ?? 0), steps, weight: d.weight ?? 1,
       off: !!d.off, extraHold: soft ? slots(45) : 0, widen: soft && d.exact !== true ? [0, 10, 20] : [0],
       canDrop: soft };
   });
@@ -334,6 +334,7 @@ export function solve(problem, { nodeLimit = 1e9, timeMs = Infinity } = {}) {
   return finish();
 
   function finish() {
+    if (best) best.why = explainDrops(P, active, lists, best);
     return { P, active, ok: !!best, best, nodes, proven: exhausted, ms: Date.now() - t0,
       emptyDishes: lists.map((l, i) => (l.length ? null : active[i].name)).filter(Boolean) };
   }
@@ -472,4 +473,40 @@ export function suggestFixes(problem, { nodeLimit = 20000, max = 5, timeBudgetMs
 
 function sameTarget(a, b) {
   return a.kind === b.kind && a.di === b.di && a.si === b.si;
+}
+
+// For each dish the best plan leaves out: why its preferred placement (on time, recipe temperature) is blocked.
+// Returns { [activeIndex]: { kind: 'shelves'|'temp'|'hob'|'hands'|'start', t, oven, temp, need, users: [names] } }
+function explainDrops(P, active, lists, best) {
+  const why = {};
+  const state = new State(P);
+  best.chosen.forEach((o) => { if (!o.dropped) state.apply(o); });
+  best.chosen.forEach((o, i) => {
+    if (!o.dropped) return;
+    const pref = lists[i].filter((x) => !x.dropped && x.widen.every((w) => !w)).sort((a, b) => a.h - b.h || a.cost - b.cost)[0];
+    if (!pref) { why[i] = { kind: 'start' }; return; }
+    const c = state.compile(pref);
+    if (!c) { why[i] = { kind: 'self' }; return; }
+    let first = null;
+    for (let j = 0; j < c.idx.length; j++) {
+      const k = c.idx[j], r = Math.floor(k / state.T), t = k % state.T;
+      const capBad = c.n[j] && state.usedF[k] + c.n[j] > c.cap[j];
+      const tempBad = Math.max(state.loF[k], c.lo[j]) > Math.min(state.hiF[k], c.hi[j]);
+      if ((capBad || tempBad) && (!first || t < first.t)) first = { t, r, capBad, tempBad, need: c.lo[j] };
+    }
+    if (!first) { why[i] = { kind: 'other' }; return; }
+    const key = state.keys[first.r];
+    const users = [];
+    best.chosen.forEach((x, m) => {
+      if (x.dropped) return;
+      active[m].steps.forEach((s, k) => {
+        const st = x.steps[k];
+        if (st.from > first.t || st.to <= first.t) return;
+        if ((key === 'hob' && s.kind === 'hob') || (key === 'hands' && s.hands) || (key === 'o' + st.oven && s.kind === 'oven')) users.push(active[m].name);
+      });
+    });
+    const kind = key === 'hob' ? 'hob' : key === 'hands' ? 'hands' : first.capBad ? 'shelves' : 'temp';
+    why[i] = { kind, t: first.t, oven: key[0] === 'o' ? +key.slice(1) : -1, need: first.need, users: [...new Set(users)] };
+  });
+  return why;
 }
