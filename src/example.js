@@ -31,8 +31,8 @@ export const EXAMPLE = {
   ],
 };
 
-// "Matters most": its compromises cost 4x. At 4x, 20 degC off on that dish (15 x 4) costs the same as leaving another
-// dish out (60); 3 was too weak on the Christmas proto menu (Yorkshires still got 10 degC off while four other dishes
+// "Matters most": its compromises cost 4x, so allowing it 20 degC off (12 x 4, before the per-hour part) costs about as
+// much as leaving another dish out (60). Tuned when that price was a flat 15: 3 was too weak on the Christmas proto menu (Yorkshires still got 10 degC off while four other dishes
 // shared compromises), 4 and 5 gave the same plans there.
 export const TOP_WEIGHT = 4;
 

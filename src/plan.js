@@ -55,7 +55,11 @@ export function normalise(problem) {
 }
 
 // Prices of compromises (in the same units as "one dish waits 5 more minutes" = 1).
-export const PRICE = { extraWait: 4, widen: { 10: 6, 20: 15 }, drop: 60 };
+// A compromise temperature is priced in two parts: a small flat price for allowing it (widen), and offHour per 10 degC
+// per hour the food actually spends outside its own range (deviation, below), capped per step at offCap so cooking
+// off-temperature stays cheaper than leaving the dish out. A flat price alone made 2.5 h of turkey 20 degC too hot
+// cost the same as 15 min of potatoes 20 degC too cool (Woman & Home's 2016 Christmas plan, test/example.test.js).
+export const PRICE = { extraWait: 4, widen: { 10: 5, 20: 12 }, offHour: 4, offCap: 40, drop: 60 };
 function holdCost(dish, h) {
   return dish.weight * (h <= dish.hold ? h * dish.holdWeight : dish.hold * dish.holdWeight + PRICE.extraWait * (h - dish.hold));
 }
@@ -285,7 +289,13 @@ function deviation(P, sched, chosen) {
   chosen.forEach(({ dish, opt }) => !opt.dropped && dish.steps.forEach((s, i) => {
     if (s.kind !== 'oven') return;
     const st = opt.steps[i];
-    for (const run of sched[st.oven]) if (run.from < st.to && run.to > st.from) dev += Math.abs(run.temp - s.nominal) / 10;
+    let off = 0;
+    for (const run of sched[st.oven]) if (run.from < st.to && run.to > st.from) {
+      dev += 0.2 * Math.abs(run.temp - s.nominal) / 10; // tie-breaker: prefer the recipe's own temperature
+      const out = Math.max(0, s.temp[0] - run.temp, run.temp - s.temp[1]);
+      off += (out / 10) * ((Math.min(run.to, st.to) - Math.max(run.from, st.from)) * SLOT / 60);
+    }
+    dev += dish.weight * Math.min(PRICE.offCap, PRICE.offHour * off);
   }));
   return dev;
 }
@@ -307,15 +317,29 @@ export function solve(problem, { nodeLimit = 1e9, timeMs = Infinity } = {}) {
   if (lists.some((l) => l.length === 0)) return finish();
   const firstFit = new Int32Array(n); // scratch: index of cheapest option that fits now
 
+  // Lower bound on a placed dish's off-temperature price: the oven's allowed range at each slot only narrows as more
+  // dishes are placed, so the part of the dish's own range it already excludes is off-temperature in any completion.
+  function forcedOff(dish, opt) {
+    if (opt.dropped) return 0;
+    let b = 0;
+    dish.steps.forEach((s, i) => {
+      if (s.kind !== 'oven') return;
+      const st = opt.steps[i], base = state.ri['o' + st.oven] * state.T;
+      let off = 0;
+      for (let t = st.from; t < st.to; t++) off += Math.max(0, state.loF[base + t] - s.temp[1], s.temp[0] - state.hiF[base + t]);
+      b += dish.weight * Math.min(PRICE.offCap, PRICE.offHour * (off / 10) * (SLOT / 60));
+    });
+    return b;
+  }
   function leaf(cost) {
     const c = chosen.map((opt, i) => ({ dish: active[i], opt }));
     const sched = tempSchedule(P, state, c);
-    const total = cost + P.wChange * changeCount(sched) + 0.2 * deviation(P, sched, c);
+    const total = cost + P.wChange * changeCount(sched) + deviation(P, sched, c);
     if (total < bestCost - 1e-9) { bestCost = total; best = { chosen: chosen.slice(), sched, cost: total }; }
   }
-  function rec(cost, left) {
+  function rec(cost, left, bsum) { // cost includes bsum, the forced off-temperature bounds of the placed dishes
     if (++nodes > nodeLimit || ((nodes & 255) === 0 && Date.now() - t0 > timeMs)) { exhausted = false; return; }
-    if (left === 0) { leaf(cost); return; }
+    if (left === 0) { leaf(cost - bsum); return; }
     // bound: every remaining dish pays at least its cheapest option that still fits; pick the dish whose cheapest
     // fitting option is most expensive relative to its unconstrained cheapest (it is the one being squeezed)
     let lb = cost, bi = -1, bScore = -Infinity;
@@ -335,12 +359,13 @@ export function solve(problem, { nodeLimit = 1e9, timeMs = Infinity } = {}) {
       if (cost + opt.cost + restLb >= bestCost - 1e-9) break;
       if (!state.fitsAll(opt)) continue;
       const mark = state.apply(opt); chosen[bi] = opt;
-      rec(cost + opt.cost, left - 1);
+      const b = forcedOff(active[bi], opt);
+      if (cost + b + opt.cost + restLb < bestCost - 1e-9) rec(cost + opt.cost + b, left - 1, bsum + b);
       chosen[bi] = null; state.undo(mark);
       if (!exhausted) return;
     }
   }
-  rec(0, n);
+  rec(0, n, 0);
   return finish();
 
   function finish() {
@@ -364,7 +389,7 @@ export function bruteForce(problem) {
     if (i === active.length) {
       const c = chosen.map((opt, k) => ({ dish: active[k], opt }));
       const sched = tempSchedule(P, state, c);
-      const total = chosen.reduce((a, o) => a + o.cost, 0) + P.wChange * changeCount(sched) + 0.2 * deviation(P, sched, c);
+      const total = chosen.reduce((a, o) => a + o.cost, 0) + P.wChange * changeCount(sched) + deviation(P, sched, c);
       if (total < bestCost) bestCost = total;
       return;
     }

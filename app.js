@@ -296,7 +296,9 @@ function compromises(r, snap) {
         if (!(run.from < st.to && run.to > st.from)) continue;
         if (run.temp < s.temp[0] - 0.5 || run.temp > s.temp[1] + 0.5) {
           const recipe = s.temp[0] === s.temp[1] ? showT(s.temp[0]) : `${showT(s.temp[0])}–${showT(s.temp[1])}`;
-          const txt = `${showT(run.temp)} instead of ${recipe}`;
+          const over = Math.min(run.to, st.to) - Math.max(run.from, st.from), len = st.to - st.from;
+          const part = over >= len ? '' : ` for ${run.from <= st.from ? 'the first' : run.to >= st.to ? 'the last' : ''} ${dur(over * 5)} of its ${dur(len * 5)}`.replace('for  ', 'for ');
+          const txt = `${showT(run.temp)} instead of ${recipe}${part}`;
           if (!offs.includes(txt)) offs.push(txt);
         }
       }

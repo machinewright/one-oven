@@ -77,3 +77,39 @@ test('a dish pinned to one oven stays there; pinning to a too-small oven gives t
   assert.ok(bad.best.chosen[ti].dropped);
   assert.equal(bad.best.why[ti].kind, 'shelves-total');
 });
+
+// Woman & Home, "Christmas Dinner Plan" (Jane Curran, 9 Dec 2016), read 2026-11-26:
+// https://www.womanandhome.com/us/food/recipes/christmas-dinner-plan-54425/
+// 3.5 kg turkey, "To serve lunch by 2.15pm": turkey out of the fridge 9am; oven 180C 10.30; turkey in 11am; potatoes
+// in 1pm ("around 1 hour"); stuffing in 1.20pm ("around 45 minutes"); 1.30pm turkey out, "Whack up the oven temperature
+// to 200C", parsnips and chipolatas in (about 30 minutes). The page doesn't give the potatoes' or stuffing's own
+// temperatures: 200C (where the oven ends up) is my reading, as are the turkey's rest (30-60 min), carving, gravy.
+// Its answer to the clash is to keep the turkey at 180C and start the potatoes and stuffing cooler. With a flat price
+// per compromised dish, the planner roasted the turkey 20C hot for all 2.5 h instead (one compromise, not two).
+test("Woman & Home's plan: the turkey keeps its 180C, the potatoes start cooler for a short while", () => {
+  const menu = {
+    serve: '14:15', from: '09:00', unit: 'C', ovens: [{ shelves: 3 }], rings: 4, cooks: 1,
+    dishes: [
+      { name: 'Turkey (3.5 kg)', hold: 0, steps: [{ kind: 'other', min: 120 }, { kind: 'oven', min: 150, temp: 180 },
+        { kind: 'rest', min: 30, max: 60 }, { kind: 'prep', min: 15 }] },
+      { name: 'Roast potatoes', hold: 0, steps: [{ kind: 'oven', min: 60, temp: 200 }] },
+      { name: 'Stuffing', hold: 0, steps: [{ kind: 'oven', min: 45, temp: 200 }] },
+      { name: 'Parsnips and chipolatas', hold: 0, steps: [{ kind: 'oven', min: 30, temp: 200 }] },
+      { name: 'Gravy', hold: 0, steps: [{ kind: 'hob', min: 15, hands: true }] },
+    ],
+  };
+  const r = solve(toProblem(menu), { nodeLimit: 60000 });
+  assert.ok(r.ok && r.proven); assert.deepEqual(verify(r), []);
+  const at = (slot) => { const m = 14 * 60 + 15 + (slot - r.P.S) * 5; return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; };
+  assert.deepEqual(r.best.sched[0].map((x) => [at(x.from), at(x.to), x.temp]), [['10:45', '13:30', 180], ['13:30', '14:15', 200]]);
+  const T = r.best.chosen[0].steps[1];
+  assert.equal(at(T.from), '11:00'); assert.equal(at(T.to), '13:30');
+  // the only food off its temperature: the potatoes, for 15 minutes (13:15-13:30 at 180C)
+  let offMin = 0;
+  r.active.forEach((d, i) => d.steps.forEach((s, k) => {
+    if (s.kind !== 'oven') return;
+    const st = r.best.chosen[i].steps[k];
+    for (const run of r.best.sched[st.oven]) if (run.temp < s.temp[0] || run.temp > s.temp[1]) offMin += Math.max(0, Math.min(run.to, st.to) - Math.max(run.from, st.from)) * 5;
+  }));
+  assert.equal(offMin, 15);
+});
