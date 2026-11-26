@@ -113,3 +113,37 @@ test("Woman & Home's plan: the turkey keeps its 180C, the potatoes start cooler 
   }));
   assert.equal(offMin, 15);
 });
+
+// US Thanksgiving in degF: not a reproduction (no fetched US plan gives every dish's time and temperature), but the
+// shape all three US day-of timelines read 2026-11-26 describe: turkey at 325F the whole time, out about an hour
+// before dinner to rest, then the oven goes up for casseroles and rolls go in last.
+// Martha Stewart via Yahoo (L. Andriani, 2019): "A 15-pound bird ... needs about 3 hours and 45 minutes at 325 degrees";
+// rest "a minimum of 30 minutes"; 1 h before dinner "Turn the oven temperature to 350 degrees ... to cook or reheat
+// casseroles". https://www.yahoo.com/lifestyle/day-thanksgiving-timeline-ultimate-guide-132650309.html
+// BuzzFeed (R. Yoder, 2026), dinner 4pm: "3:00 p.m. — Aim to have the turkey out, then start your final oven dishes";
+// rolls at 3:50. https://www.buzzfeed.com/rossyoder/thanksgiving-hosting-plan-planner
+// CNN via ABC7 (C. Barber, 2023): during the rest "increase the oven heat to 375 degrees and reheat the casseroles".
+// Side durations (30 min reheats, 10 min rolls) and the 2 shelves are mine.
+test('US Thanksgiving in F: turkey stays at 325F, oven goes up to 350F only once it is out', () => {
+  const menu = {
+    serve: '16:00', from: '09:00', unit: 'F', ovens: [{ shelves: 2 }], rings: 4, cooks: 1,
+    dishes: [
+      { name: 'Turkey (15 lb)', hold: 0, steps: [{ kind: 'oven', min: 225, temp: 325 }, { kind: 'rest', min: 30, max: 60 }, { kind: 'prep', min: 15 }] },
+      { name: 'Stuffing (reheat)', hold: 10, steps: [{ kind: 'oven', min: 30, temp: 350 }] },
+      { name: 'Green bean casserole', hold: 10, steps: [{ kind: 'oven', min: 30, temp: 350 }] },
+      { name: 'Rolls', hold: 0, steps: [{ kind: 'oven', min: 10, temp: 350 }] },
+      { name: 'Mashed potatoes', hold: 15, steps: [{ kind: 'hob', min: 30 }] },
+      { name: 'Gravy', hold: 0, steps: [{ kind: 'hob', min: 10, hands: true }] },
+    ],
+  };
+  const r = solve(toProblem(menu), { nodeLimit: 60000 });
+  assert.ok(r.ok && r.proven); assert.deepEqual(verify(r), []);
+  const at = (slot) => { const m = 16 * 60 + (slot - r.P.S) * 5; return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; };
+  const runs = r.best.sched[0].map((x) => [at(x.from), at(x.to), x.temp]);
+  assert.deepEqual(runs.map((x) => x[2]), [325, 350]);
+  const T = r.best.chosen[0].steps[0];
+  assert.equal(at(T.to), runs[0][1]); // the oven goes up exactly when the turkey comes out
+  assert.ok(r.P.S - T.to >= 9, 'turkey out at least 45 min before dinner');
+  const rolls = r.best.chosen[3].steps[0];
+  assert.equal(at(rolls.to), '16:00');
+});
