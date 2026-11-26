@@ -122,7 +122,7 @@ function summaryText(d) {
     if (s.kind === 'rest') return `rest ${m}`;
     return `wait ${m}`;
   });
-  return parts.join(' → ') + (d.readyBy ? ` · made ahead, ready by ${d.readyBy}` : (d.hold ? ` · keeps warm ${d.hold} min` : '') + (d.serveAt ? ` · served +${d.serveAt} min` : '')) + (d.off ? ' · left out' : '');
+  return parts.join(' → ') + (d.readyBy ? ` · made ahead, ready by ${d.readyBy}` : (d.hold ? ` · keeps warm ${d.hold} min` : '') + (d.serveAt ? ` · served +${d.serveAt} min` : '')) + (d.top ? ' · matters most' : '') + (d.off ? ' · left out' : '');
 }
 function dishHTML(d, i) {
   const later = d.serveAt ?? 0;
@@ -139,6 +139,7 @@ function dishHTML(d, i) {
       ${d.readyBy ? `<label class="fld">ready by <input class="f-readyby" type="time" step="300" value="${esc(d.readyBy)}"></label>`
         : `<label class="fld">Once done, it can be kept warm <select class="f-hold">${opts(withCur(HOLDS, d.hold ?? 0), d.hold ?? 0, (v) => (v ? `up to ${v} min` : 'no, serve at once'))}</select></label>`}
       <label class="chk"><input class="f-exact" type="checkbox"${d.exact ? ' checked' : ''}> exact temperature (baking)</label>
+      <label class="chk"><input class="f-top" type="checkbox"${d.top ? ' checked' : ''}> matters most (other dishes give way first)</label>
       <label class="chk"><input class="f-off" type="checkbox"${d.off ? ' checked' : ''}> leave out</label>
     </div>
   </details>`;
@@ -176,6 +177,7 @@ function bindDishes() {
     }
     else if (c.contains('f-readyby')) { if (el.value) d.readyBy = el.value; else return; }
     else if (c.contains('f-exact')) d.exact = el.checked;
+    else if (c.contains('f-top')) d.top = el.checked;
     else if (c.contains('f-off')) { d.off = el.checked; dEl.classList.toggle('off', d.off); }
     else if (s) {
       if (c.contains('f-kind')) {
@@ -290,7 +292,7 @@ function compromises(r, snap) {
       }
     });
     if (offs.length) parts.push(`cooks at ${offs.join(', then ')}${m && m.exact ? '' : '; most roasting copes with that, but tick “exact temperature” if this dish can’t'}`);
-    if (parts.length) out.push(`${N} ${parts.join('; it also ')}.`);
+    if (parts.length) out.push(`${N} ${parts.join('; it also ')}.${m && m.top ? ' (You marked it “matters most”; there was no gentler way for this dish.)' : ''}`);
   });
   return out;
 }
@@ -366,7 +368,7 @@ function render(r, snap) {
   const changes = r.sched.reduce((a, runs) => a + Math.max(0, runs.length - 1), 0);
   const allStart = Math.min(...r.chosen.flatMap((o) => o.steps.map((s) => s.from)), firstOn);
   const head = comp.length
-    ? `<p class="verdict warn">It doesn't all fit as written. The plan below needs ${comp.length === 1 ? 'one compromise' : comp.length + ' compromises'}:</p><ul class="comp">${comp.map((c) => `<li>${c}</li>`).join('')}</ul>`
+    ? `<p class="verdict warn">It doesn't all fit as written. The plan below needs ${comp.length === 1 ? 'one compromise' : comp.length + ' compromises'}:</p><ul class="comp">${comp.map((c) => `<li>${c}</li>`).join('')}</ul>${snap.dishes.some((d) => d.top) ? '' : '<p class="note">Care more about one dish than the others? Open it and tick “matters most”.</p>'}`
     : `<p class="verdict good">Everything fits, as written.</p>`;
   const facts = Number.isFinite(allStart) ? [`Start at <strong>${clock(allStart)}</strong>`] : [];
   if (Number.isFinite(firstOn)) facts.push(`oven on at <strong>${clock(firstOn)}</strong>`, changes ? `${changes} temperature change${changes > 1 ? 's' : ''}` : 'one temperature all day');

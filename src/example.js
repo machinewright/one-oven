@@ -31,6 +31,11 @@ export const EXAMPLE = {
   ],
 };
 
+// "Matters most": its compromises cost 4x. At 4x, 20 degC off on that dish (15 x 4) costs the same as leaving another
+// dish out (60); 3 was too weak on the Christmas proto menu (Yorkshires still got 10 degC off while four other dishes
+// shared compromises), 4 and 5 gave the same plans there.
+export const TOP_WEIGHT = 4;
+
 // UI menu (times as clock strings) -> solver problem (minutes before serving).
 export function toProblem(m) {
   const toMin = (s) => { const [h, mm] = s.split(':').map(Number); return h * 60 + mm; };
@@ -46,7 +51,7 @@ export function toProblem(m) {
         hold = Math.max(0, before + serveAt);
         holdWeight = 0.02;
       }
-      return { name: d.name, hold, holdWeight, serveAt, exact: !!d.exact, off: !!d.off, steps: d.steps.map((s) => ({ ...s })) };
+      return { name: d.name, hold, holdWeight, serveAt, exact: !!d.exact, off: !!d.off, weight: d.top ? TOP_WEIGHT : 1, steps: d.steps.map((s) => ({ ...s })) };
     }),
   };
 }

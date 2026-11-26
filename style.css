@@ -70,7 +70,8 @@ button.link { border: none; background: none; padding: 4px 0; color: #1e5b9c; }
 .srow .f-label { flex: 1; min-width: 160px; font-size: 14px; }
 .srow .f-del { margin-left: auto; }
 .dopts { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--rule); font-size: 14px; }
-.dopts select { font-size: 14px; }
+.dopts select { font-size: 14px; max-width: 100%; }
+@media (max-width: 480px) { .dopts .fld { flex-wrap: wrap; } }
 
 .plan { font: 400 15px/1.5 var(--sans); }
 .plan h2 { font-family: var(--serif); }

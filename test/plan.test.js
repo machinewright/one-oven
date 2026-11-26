@@ -75,3 +75,31 @@ test('with compromises allowed: optimum equals brute force on tiny problems', ()
   console.log({ drops, widened, extra });
   assert.ok(widened > 0 && extra > 0);
 });
+
+test('dish weights ("matters most"): optimum still equals brute force', () => {
+  const r = rng(11);
+  for (let k = 0; k < 20; k++) {
+    const p = randomProblem(r);
+    p.dishes = p.dishes.slice(0, 3);
+    p.dishes.forEach((d) => { d.steps = d.steps.slice(0, 2); });
+    p.dishes[Math.floor(r() * p.dishes.length)].weight = 4;
+    const bf = bruteForce(p);
+    const res = solve(p);
+    assert.ok(res.ok && res.proven);
+    assert.ok(Math.abs(res.best.cost - bf) < 1e-6, `case ${k}: ${res.best.cost} vs ${bf}`);
+    assert.deepEqual(verify(res), [], `case ${k}`);
+  }
+});
+
+test('marking Yorkshire puddings "matters most" moves their compromise onto other dishes', async () => {
+  const { xmas } = await import('../proto/xmas.js');
+  const { TOP_WEIGHT } = await import('../src/example.js');
+  const yi = xmas.dishes.findIndex((d) => d.name === 'Yorkshire puddings');
+  const plain = solve(xmas);
+  assert.ok(plain.best.chosen[yi].widen.some((w) => w), 'without the mark they cook at a compromise temperature');
+  const top = solve({ ...xmas, dishes: xmas.dishes.map((d, i) => (i === yi ? { ...d, weight: TOP_WEIGHT } : d)) });
+  const o = top.best.chosen[yi];
+  assert.ok(top.proven && !o.dropped && o.h === 0 && o.widen.every((w) => !w));
+  assert.ok(top.best.chosen.every((c) => !c.dropped));
+  assert.deepEqual(verify(top), []);
+});
