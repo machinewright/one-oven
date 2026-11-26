@@ -70,11 +70,11 @@ const MAX_OPTIONS = 6000;
 // `sampled` is set when not every value is included (then the search can no longer claim to be exhaustive).
 function spread(lo, hi, info) {
   const out = [];
-  if (hi - lo <= 12) { for (let k = lo; k <= hi; k++) out.push(k); return out; }
+  if (hi - lo <= 24) { for (let k = lo; k <= hi; k++) out.push(k); return out; }
   info.sampled = true;
-  for (let k = lo; k <= lo + 6; k++) out.push(k);
-  const step = Math.ceil((hi - lo - 6) / 8);
-  for (let k = lo + 6 + step; k < hi; k += step) out.push(k);
+  for (let k = lo; k <= lo + 12; k++) out.push(k);
+  const step = Math.ceil((hi - lo - 12) / 12);
+  for (let k = lo + 12 + step; k < hi; k += step) out.push(k);
   out.push(hi);
   return out;
 }
@@ -88,7 +88,7 @@ export function dishOptions(P, dish) {
   const waitChoices = dish.steps.map((s, i) => (i === nSteps - 1 || s.wait === 0 ? [0] : spread(0, s.wait, info)));
   const lenChoices = dish.steps.map((s) => (s.maxLen === s.len ? [s.len] : spread(s.len, s.maxLen, info)));
   const hChoices = spread(0, dish.hold + dish.extraHold, info);
-  if (dish.extraHold && dish.hold + dish.extraHold > 12 && !hChoices.includes(dish.hold)) { hChoices.push(dish.hold); hChoices.sort((a, b) => a - b); }
+  if (!hChoices.includes(dish.hold)) { hChoices.push(dish.hold); hChoices.sort((a, b) => a - b); }
   const perH = Math.max(60, Math.floor(MAX_OPTIONS / hChoices.length));
   // a dish stays in one oven (nobody wants to carry a half-baked pie across the kitchen)
   const allowed = P.ovens.map((_, k) => k).filter((k) => ovenSteps.every((i) => !dish.steps[i].ovens || dish.steps[i].ovens.includes(k)));
