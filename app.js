@@ -68,7 +68,7 @@ function bindSettings() {
   on('#shelves', (e) => { menu.ovens[0].shelves = clampInt(e.value, 1, 6, 3); });
   on('#second', (e) => {
     if (e.checked && menu.ovens.length < 2) menu.ovens.push({ name: 'Second oven', shelves: 1 });
-    if (!e.checked) menu.ovens = menu.ovens.slice(0, 1);
+    if (!e.checked) { menu.ovens = menu.ovens.slice(0, 1); menu.dishes.forEach((d) => { delete d.oven; }); }
     menu.ovens[0].name = menu.ovens.length > 1 ? 'Main oven' : 'Oven';
     renderSettings(); renderDishes();
   });
@@ -122,7 +122,7 @@ function summaryText(d) {
     if (s.kind === 'rest') return `rest ${m}`;
     return `wait ${m}`;
   });
-  return parts.join(' → ') + (d.readyBy ? ` · made ahead, ready by ${d.readyBy}` : (d.hold ? ` · keeps warm ${d.hold} min` : '') + (d.serveAt ? ` · served +${d.serveAt} min` : '')) + (menu.ovens.length > 1 && Number.isInteger(d.oven) ? (d.oven ? ' · second oven' : ' · main oven') : '') + (d.top ? ' · matters most' : '') + (d.off ? ' · left out' : '');
+  return parts.join(' → ') + (d.readyBy ? ` · made ahead, ready by ${d.readyBy}` : (d.hold ? ` · keeps warm ${d.hold} min` : '') + (d.serveAt ? ` · served +${d.serveAt} min` : '')) + (menu.ovens.length > 1 && (d.oven === 0 || d.oven === 1) && d.steps.some((s) => s.kind === 'oven') ? (d.oven ? ' · second oven' : ' · main oven') : '') + (d.top ? ' · matters most' : '') + (d.off ? ' · left out' : '');
 }
 function dishHTML(d, i) {
   const later = d.serveAt ?? 0;
@@ -186,6 +186,7 @@ function bindDishes() {
         s.kind = el.value;
         if (s.kind === 'oven' && s.temp == null) { s.temp = 180; s.shelves = 1; }
         if (s.kind === 'prep') s.hands = true; else if (s.kind !== 'hob') delete s.hands;
+        if (!d.steps.some((x) => x.kind === 'oven')) delete d.oven;
         rerender = true;
       } else if (c.contains('f-min')) { const v = Number(el.value); if (v > 0) s.min = Math.min(900, v); else return; }
       else if (c.contains('f-max')) { const v = Number(el.value); if (el.value === '' || !(v > 0)) delete s.max; else s.max = Math.min(900, v); }
@@ -210,7 +211,7 @@ function bindDishes() {
     const { d, k } = where(b); if (!d) return;
     const i = menu.dishes.indexOf(d);
     if (b.classList.contains('f-ddel')) { menu.dishes.splice(i, 1); const o = [...openDishes].filter((x) => x !== i).map((x) => (x > i ? x - 1 : x)); openDishes.clear(); o.forEach((x) => openDishes.add(x)); }
-    else if (b.classList.contains('f-del')) { d.steps.splice(k, 1); if (!d.steps.length) menu.dishes.splice(i, 1); }
+    else if (b.classList.contains('f-del')) { d.steps.splice(k, 1); if (!d.steps.length) menu.dishes.splice(i, 1); else if (!d.steps.some((x) => x.kind === 'oven')) delete d.oven; }
     else if (b.classList.contains('f-add')) d.steps.push({ kind: 'oven', min: 30, temp: 180, shelves: 1 });
     else return;
     renderDishes(); changed(0);
@@ -294,7 +295,7 @@ function compromises(r, snap) {
       }
     });
     if (offs.length) parts.push(`cooks at ${offs.join(', then ')}${m && m.exact ? '' : '; most roasting copes with that, but tick “exact temperature” if this dish can’t'}`);
-    if (parts.length) out.push(`${N} ${parts.join('; it also ')}.${m && m.top ? ' (You marked it “matters most”; there was no gentler way for this dish.)' : ''}`);
+    if (parts.length) out.push(`${N} ${parts.join('; it also ')}.${m && m.top ? ' (It’s marked “matters most”, so the planner already gave it more weight than the others.)' : ''}`);
   });
   return out;
 }
@@ -309,7 +310,7 @@ function whyText(w) {
   if (w.kind === 'preheat') return 'There isn’t enough time between “kitchen free from” and serving to heat the oven (15 min) and cook it. ';
   if (w.kind === 'hob') return `To be ready on time it needs a hob ring from ${at}, but they're all taken (${them}). `;
   if (w.kind === 'hands') return `To be ready on time it needs you from ${at}, but you're busy with ${them}. `;
-  if (w.kind === 'shelves-total') return `It needs more shelves than ${lastP.ovens.length > 1 ? 'the oven it may use' : 'your oven'} has. `;
+  if (w.kind === 'shelves-total') return `It needs more shelves than ${lastP.ovens.length > 1 ? 'any oven it may use' : 'your oven'} has. `;
   if (w.kind === 'start') return 'It takes longer than the time between “kitchen free from” and serving. ';
   return '';
 }
