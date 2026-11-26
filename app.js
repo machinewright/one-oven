@@ -35,8 +35,8 @@ const save = () => { try { localStorage.setItem(STORE, JSON.stringify(menu)); } 
 // Units and clock
 
 const F = () => menu.unit === 'F';
-const showT = (c) => (F() ? `${Math.round((c * 9 / 5 + 32) / 5) * 5}°F` : `${Math.round(c)}°C`);
-const toInputT = (c) => (F() ? Math.round((c * 9 / 5 + 32) / 5) * 5 : Math.round(c));
+const showT = (c) => (F() ? `${Math.round(c * 9 / 5 + 32)}°F` : `${Math.round(c)}°C`);
+const toInputT = (c) => (F() ? Math.round(c * 9 / 5 + 32) : Math.round(c));
 const fromInputT = (v) => (F() ? (v - 32) * 5 / 9 : v);
 const toMin = (s) => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
 let lastP = null;
@@ -82,7 +82,7 @@ function clampInt(v, lo, hi, def) { const n = Math.round(Number(v)); return Numb
 // Dish editor
 
 const KINDS = [
-  ['oven', 'In the oven'], ['hob', 'On the hob'], ['prep', 'Hands-on (prep, carving)'],
+  ['oven', 'In the oven'], ['hob', 'On the hob'], ['prep', 'Hands-on (prep, carve)'],
   ['rest', 'Resting'], ['other', 'Waiting (nothing needed)'],
 ];
 const HOLDS = [0, 5, 10, 15, 20, 30, 45, 60, 90, 120];
@@ -98,8 +98,8 @@ function stepHTML(s, k, last) {
   return `<li class="step" data-k="${k}">
     <div class="srow">
       <select class="f-kind" aria-label="Where">${KINDS.map(([v, l]) => `<option value="${v}"${v === kind ? ' selected' : ''}>${l}</option>`).join('')}</select>
-      <span class="fld"><input id="${mId}" class="f-min" type="number" min="5" max="900" step="5" inputmode="numeric" value="${s.min}"><label for="${mId}">min</label></span>
-      <span class="fld"><label for="${xId}">up to</label><input id="${xId}" class="f-max" type="number" min="5" max="900" step="5" inputmode="numeric" value="${s.max ?? ''}" placeholder="–" title="If this step can take longer (a turkey can rest 30 to 90 minutes), the longest it can take"></span>
+      <span class="fld"><input id="${mId}" class="f-min" type="number" min="5" max="900" step="5" inputmode="numeric" value="${s.min}" aria-label="Minutes"></span>
+      <span class="fld"><label for="${xId}">to</label><input id="${xId}" class="f-max" type="number" min="5" max="900" step="5" inputmode="numeric" value="${s.max ?? ''}" placeholder="max" title="Optional: if this step can take longer (a turkey can rest 30 to 90 minutes), the longest it can take"><span class="unit">min</span></span>
       ${kind === 'oven' ? `<span class="fld"><label for="${tId}">at</label><input id="${tId}" class="f-temp" type="number" min="50" max="550" step="5" inputmode="numeric" value="${toInputT(Array.isArray(s.temp) ? s.temp[0] : s.temp ?? 180)}"><span class="unit">°${F() ? 'F' : 'C'}</span></span>
         <select class="f-shelves" aria-label="Shelves it takes">${[1, 2, 3].map((n) => `<option value="${n}"${(s.shelves ?? 1) === n ? ' selected' : ''}>${n} shelf${n > 1 ? 's' : ''}</option>`).join('').replace(/shelfs/g, 'shelves')}</select>` : ''}
       ${kind === 'hob' ? `<label class="chk"><input class="f-hands" type="checkbox"${s.hands ? ' checked' : ''}> needs you</label>` : ''}
@@ -107,7 +107,7 @@ function stepHTML(s, k, last) {
     </div>
     <div class="srow sub">
       <input class="f-label" type="text" maxlength="80" value="${esc(s.label ?? '')}" placeholder="note, e.g. foil off" aria-label="Note for this step">
-      ${last ? '' : `<label class="fld">then it can wait <select class="f-wait">${opts(withCur(WAITS, s.wait ?? 0), s.wait ?? 0, (v) => (v ? `up to ${v} min` : 'no'))}</select></label>`}
+      ${last ? '' : `<label class="fld">Pause before the next step <select class="f-wait">${opts(withCur(WAITS, s.wait ?? 0), s.wait ?? 0, (v) => (v ? `up to ${v} min` : 'none'))}</select></label>`}
     </div>
   </li>`;
 }
@@ -122,7 +122,7 @@ function summaryText(d) {
     if (s.kind === 'rest') return `rest ${m}`;
     return `wait ${m}`;
   });
-  return parts.join(' → ') + (d.hold ? ` · can wait ${d.hold} min` : '') + (d.serveAt ? ` · served +${d.serveAt} min` : '') + (d.off ? ' · left out' : '');
+  return parts.join(' → ') + (d.readyBy ? ` · made ahead, ready by ${d.readyBy}` : (d.hold ? ` · keeps warm ${d.hold} min` : '') + (d.serveAt ? ` · served +${d.serveAt} min` : '')) + (d.off ? ' · left out' : '');
 }
 function dishHTML(d, i) {
   const later = d.serveAt ?? 0;
@@ -135,8 +135,9 @@ function dishHTML(d, i) {
     <ol class="steps">${d.steps.map((s, k) => stepHTML(s, k, k === d.steps.length - 1)).join('')}</ol>
     <button class="link f-add" type="button">+ add a step</button>
     <div class="dopts">
-      <label class="fld">Once done, it can wait <select class="f-hold">${opts(withCur(HOLDS, d.hold ?? 0), d.hold ?? 0, (v) => (v ? `up to ${v} min` : 'no, serve at once'))}</select></label>
-      <label class="fld">Served <select class="f-later">${opts(withCur(LATER, later), later, (v) => (v ? `${v} min after the main course` : 'with the main course'))}</select></label>
+      <label class="fld">Served <select class="f-later">${opts(withCur(LATER, later), d.readyBy ? -1 : later, (v) => (v ? `${v} min after the main course` : 'with the main course'))}<option value="-1"${d.readyBy ? ' selected' : ''}>made ahead, ready by…</option></select></label>
+      ${d.readyBy ? `<label class="fld">ready by <input class="f-readyby" type="time" step="300" value="${esc(d.readyBy)}"></label>`
+        : `<label class="fld">Once done, it can be kept warm <select class="f-hold">${opts(withCur(HOLDS, d.hold ?? 0), d.hold ?? 0, (v) => (v ? `up to ${v} min` : 'no, serve at once'))}</select></label>`}
       <label class="chk"><input class="f-exact" type="checkbox"${d.exact ? ' checked' : ''}> exact temperature (baking)</label>
       <label class="chk"><input class="f-off" type="checkbox"${d.off ? ' checked' : ''}> leave out</label>
     </div>
@@ -167,7 +168,13 @@ function bindDishes() {
     let rerender = false;
     if (c.contains('f-name')) { d.name = el.value || 'Dish'; }
     else if (c.contains('f-hold')) d.hold = +el.value;
-    else if (c.contains('f-later')) d.serveAt = +el.value;
+    else if (c.contains('f-later')) {
+      const v = +el.value;
+      if (v < 0) { d.serveAt = 0; if (!d.readyBy) { const m = (toMin(menu.serve) - 120 + 1440) % 1440; d.readyBy = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; } }
+      else { d.serveAt = v; delete d.readyBy; }
+      rerender = true;
+    }
+    else if (c.contains('f-readyby')) { if (el.value) d.readyBy = el.value; else return; }
     else if (c.contains('f-exact')) d.exact = el.checked;
     else if (c.contains('f-off')) { d.off = el.checked; dEl.classList.toggle('off', d.off); }
     else if (s) {
@@ -236,17 +243,21 @@ function changed(delay = 150) {
   clearTimeout(timer);
   timer = setTimeout(run, delay);
 }
+let snapshot = null;
 function run() {
   const id = ++jobId;
+  snapshot = clone(menu);
   $('#status').textContent = 'Planning…';
-  worker.postMessage({ id, problem: toProblem(menu), timeMs: 1500 });
+  $('.plan').classList.add('stale');
+  worker.postMessage({ id, problem: toProblem(snapshot), nodeLimit: 60000, timeMs: 8000 });
 }
 worker.onmessage = (e) => {
   if (e.data.id !== jobId) return;
   const r = e.data.result;
   $('#status').textContent = '';
+  $('.plan').classList.remove('stale');
   if (r.error) { $('#verdict').innerHTML = `<p class="bad">Something went wrong: ${esc(r.error)}</p>`; return; }
-  render(r);
+  render(r, snapshot);
 };
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -254,24 +265,32 @@ worker.onmessage = (e) => {
 
 function ovenName(o) { return lastP.ovens.length > 1 ? (o === 0 ? 'the main oven' : 'the second oven') : 'the oven'; }
 
-function compromises(r) {
+function compromises(r, snap) {
   const out = [];
   r.dishes.forEach((d, i) => {
-    const o = r.chosen[i], m = menu.dishes[d.index];
-    if (o.dropped) { out.push(`<strong>${esc(d.name)}</strong>: no room. ${whyText(r.why && r.why[i])}Make it ahead and reheat it, cook it in another appliance, or change something on the menu.`); return; }
-    if (o.h > d.hold) out.push(`<strong>${esc(d.name)}</strong>: has to be ready ${o.h * 5} min before it's served (you said it can wait ${d.hold ? `up to ${d.hold * 5} min` : 'no time at all'}). Keep it covered and warm.`);
+    const o = r.chosen[i], m = snap.dishes[d.index];
+    const N = `<strong>${esc(d.name)}</strong>`;
+    if (o.dropped) { out.push(`${N}: no room. ${whyText(r.why && r.why[i])}Make it ahead and reheat it, cook it in another appliance, or change something on the menu.`); return; }
+    const parts = [];
+    if (o.h > d.hold) {
+      const afterRest = d.steps[d.steps.length - 1].kind === 'rest' ? ', after its rest' : '';
+      parts.push(`is done ${dur(o.h * 5)} before it's served${afterRest} (you allowed ${d.hold ? dur(d.hold * 5) : 'no wait'}); keep it covered and warm`);
+    }
+    const offs = [];
     d.steps.forEach((s, k) => {
       if (s.kind !== 'oven') return;
       const st = o.steps[k];
-      const temps = new Set();
-      for (const run of r.sched[st.oven]) if (run.from < st.to && run.to > st.from) temps.add(run.temp);
-      const off = [...temps].filter((t) => t < s.temp[0] - 1e-6 || t > s.temp[1] + 1e-6);
-      if (off.length) {
-        const recipe = s.temp[0] === s.temp[1] ? showT(s.temp[0]) : `${showT(s.temp[0])}–${showT(s.temp[1])}`;
-        const what = d.steps.filter((x) => x.kind === 'oven').length > 1 ? ` (${s.label || `oven step ${k + 1}`})` : '';
-        out.push(`<strong>${esc(d.name)}</strong>${esc(what)}: cooks at ${off.map(showT).join(' and ')} instead of ${recipe}. Most roasting copes with that; check on it${m && m.exact ? '' : ', or tick “exact temperature” if it can’t'}.`);
+      for (const run of r.sched[st.oven]) {
+        if (!(run.from < st.to && run.to > st.from)) continue;
+        if (run.temp < s.temp[0] - 0.5 || run.temp > s.temp[1] + 0.5) {
+          const recipe = s.temp[0] === s.temp[1] ? showT(s.temp[0]) : `${showT(s.temp[0])}–${showT(s.temp[1])}`;
+          const txt = `${showT(run.temp)} instead of ${recipe}`;
+          if (!offs.includes(txt)) offs.push(txt);
+        }
       }
     });
+    if (offs.length) parts.push(`cooks at ${offs.join(', then ')}${m && m.exact ? '' : '; most roasting copes with that, but tick “exact temperature” if this dish can’t'}`);
+    if (parts.length) out.push(`${N} ${parts.join('; it also ')}.`);
   });
   return out;
 }
@@ -282,9 +301,10 @@ function whyText(w) {
   const them = w.users && w.users.length ? w.users.map(esc).join(', ') : 'other dishes';
   if (w.kind === 'shelves') return `To be ready on time it needs space in ${ovenName(w.oven)} from ${at}, but it's full then (${them}). `;
   if (w.kind === 'temp') return `To be ready on time it needs ${ovenName(w.oven)} at ${showT(w.need)} from ${at} (counting the heating up), but ${them} need it at another temperature then. `;
+  if (w.kind === 'hob' && w.t === undefined) return 'It needs more hob rings than you have. ';
+  if (w.kind === 'preheat') return 'There isn’t enough time between “kitchen free from” and serving to heat the oven (15 min) and cook it. ';
   if (w.kind === 'hob') return `To be ready on time it needs a hob ring from ${at}, but they're all taken (${them}). `;
   if (w.kind === 'hands') return `To be ready on time it needs you from ${at}, but you're busy with ${them}. `;
-  if (w.kind === 'hob' && w.t === undefined) return 'It needs more hob rings than you have. ';
   if (w.kind === 'shelves-total') return 'It needs more shelves than your oven has. ';
   if (w.kind === 'start') return 'It takes longer than the time between “kitchen free from” and serving. ';
   return '';
@@ -295,9 +315,11 @@ function events(r) {
   const add = (t, order, text, cls = '') => ev.push({ t, order, text, cls });
   r.sched.forEach((runs, o) => runs.forEach((run, k) => {
     const prev = runs[k - 1], next = runs[k + 1];
-    const verb = !prev || prev.to < run.from ? `Turn ${ovenName(o)} on to` : run.temp > prev.temp ? `Turn ${ovenName(o)} up to` : `Turn ${ovenName(o)} down to`;
-    add(run.from, 1, `${verb} <strong>${showT(run.temp)}</strong>`, 'temp');
-    if (!next || next.from > run.to) add(run.to, 0, `Turn ${ovenName(o)} off`, 'temp');
+    const SHORT = 3; // gaps of 15 minutes or less: keep the oven on
+    const wasOff = !prev || run.from - prev.to > SHORT;
+    const verb = wasOff ? `Turn ${ovenName(o)} on to` : run.temp > prev.temp ? `Turn ${ovenName(o)} up to` : run.temp < prev.temp ? `Turn ${ovenName(o)} down to` : '';
+    if (verb) add(run.from, 1, `${verb} <strong>${showT(run.temp)}</strong>`, 'temp');
+    if (!next || next.from - run.to > SHORT) add(run.to, 0.5, `Turn ${ovenName(o)} off`, 'temp');
   }));
   r.dishes.forEach((d, i) => {
     const o = r.chosen[i]; if (o.dropped) return;
@@ -308,43 +330,48 @@ function events(r) {
       const len = (st.to - st.from) * 5;
       if (s.kind === 'oven') {
         const cont = prevS && prevS.kind === 'oven' && o.steps[k - 1].oven === st.oven && o.steps[k - 1].to === st.from;
-        if (!cont) add(st.from, 2, `<strong>${N}</strong> into ${ovenName(st.oven)}${L}${s.shelves > 1 ? ` <span class="note">(${s.shelves} shelves)</span>` : ''} <span class="note">${dur(len)}</span>`);
-        else if (s.label) add(st.from, 2, `<strong>${N}</strong>${L} <span class="note">${dur(len)} more</span>`);
+        if (!cont) add(st.from, 2, `<strong>${N}</strong> into ${ovenName(st.oven)}${L} <span class="note">(${s.shelves > 1 ? `${s.shelves} shelves, ` : ''}${dur(len)})</span>`);
+        else if (s.label) add(st.from, 2, `<strong>${N}</strong>${L} <span class="note">(${dur(len)} more)</span>`);
         const contNext = nextS && nextS.kind === 'oven' && o.steps[k + 1].oven === st.oven && o.steps[k + 1].from === st.to;
         if (!contNext) add(st.to, 0, `<strong>${N}</strong> out of ${ovenName(st.oven)}`);
       } else if (s.kind === 'hob') {
-        add(st.from, 2, `<strong>${N}</strong> on the hob${L} <span class="note">${dur(len)}${s.hands ? ', stay with it' : ''}</span>`);
+        add(st.from, 2, `<strong>${N}</strong> on the hob${L} <span class="note">(${dur(len)}${s.hands ? ', stay with it' : ''})</span>`);
       } else if (s.kind === 'prep') {
-        add(st.from, 3, `<strong>${N}</strong>${L || ': prepare'} <span class="note">${dur(len)}, hands-on</span>`);
+        add(st.from, 3, `<strong>${N}</strong>${L || ': prepare'} <span class="note">(${dur(len)}, hands-on)</span>`);
       } else if (s.kind === 'rest') {
-        add(st.from, 3, `<strong>${N}</strong>${L || ': rest'} <span class="note">${dur(len)}</span>`);
+        add(st.from, 3, `<strong>${N}</strong>${L || ': rest'} <span class="note">(${dur(len)})</span>`);
       } else {
-        add(st.from, 3, `<strong>${N}</strong>${L || ': wait'} <span class="note">${dur(len)}</span>`);
+        add(st.from, 3, `<strong>${N}</strong>${L || ': wait'} <span class="note">(${dur(len)})</span>`);
       }
     });
-    if (o.d < d.serve) add(o.d, 4, `<strong>${N}</strong>: done, keep warm <span class="note">${(d.serve - o.d) * 5} min until it's served</span>`);
+    if (o.d < d.serve) add(o.d, 4, d.serve < lastP.S ? `<strong>${N}</strong>: done; it keeps until it's served` : `<strong>${N}</strong>: done, keep warm <span class="note">(${dur((d.serve - o.d) * 5)} until it's served)</span>`);
   });
-  const serves = new Set(r.dishes.map((d) => d.serve));
-  for (const t of serves) add(t, 5, t === lastP.S ? '<strong>Serve</strong>' : `<strong>Serve</strong> ${esc(r.dishes.filter((d, i) => d.serve === t && !r.chosen[i].dropped).map((d) => d.name).join(', '))}`, 'serve');
+  const serves = new Set(r.dishes.filter((d, i) => !r.chosen[i].dropped).map((d) => d.serve));
+  for (const t of serves) {
+    const names = esc(r.dishes.filter((d, i) => d.serve === t && !r.chosen[i].dropped).map((d) => d.name).join(', '));
+    if (t === lastP.S) add(t, 5, '<strong>Serve</strong>', 'serve');
+    else if (t > lastP.S) add(t, 5, `<strong>Serve</strong> ${names}`, 'serve');
+    else if (names) add(t, 5, `<strong>Ready:</strong> ${names} <span class="note">(made ahead)</span>`, 'serve');
+  }
   ev.sort((a, b) => a.t - b.t || a.order - b.order);
   return ev;
 }
 
-function render(r) {
+function render(r, snap) {
   lastP = r.P;
   if (!r.dishes.length) { $('#verdict').innerHTML = '<p>Add a dish to get a plan.</p>'; $('#chart').innerHTML = ''; $('#steplist').innerHTML = ''; return; }
   if (!r.chosen) { $('#verdict').innerHTML = '<p class="bad">No plan found. Check that the kitchen opens early enough for the longest dish.</p>'; $('#chart').innerHTML = ''; $('#steplist').innerHTML = ''; return; }
-  const comp = compromises(r);
+  const comp = compromises(r, snap);
   const firstOn = Math.min(...r.sched.flat().map((x) => x.from), Infinity);
   const changes = r.sched.reduce((a, runs) => a + Math.max(0, runs.length - 1), 0);
   const allStart = Math.min(...r.chosen.flatMap((o) => o.steps.map((s) => s.from)), firstOn);
   const head = comp.length
     ? `<p class="verdict warn">It doesn't all fit as written. The plan below needs ${comp.length === 1 ? 'one compromise' : comp.length + ' compromises'}:</p><ul class="comp">${comp.map((c) => `<li>${c}</li>`).join('')}</ul>`
     : `<p class="verdict good">Everything fits, as written.</p>`;
-  const facts = [`Start at <strong>${clock(allStart)}</strong>`];
+  const facts = Number.isFinite(allStart) ? [`Start at <strong>${clock(allStart)}</strong>`] : [];
   if (Number.isFinite(firstOn)) facts.push(`oven on at <strong>${clock(firstOn)}</strong>`, changes ? `${changes} temperature change${changes > 1 ? 's' : ''}` : 'one temperature all day');
-  $('#verdict').innerHTML = head + `<p class="facts">${facts.join(' · ')}</p>` +
-    (r.proven ? '' : '<p class="note">This is the best plan I found in 1.5 seconds; with this many dishes a slightly better one may exist.</p>');
+  $('#verdict').innerHTML = head + (facts.length ? `<p class="facts">${facts.join(' · ')}</p>` : '') +
+    (r.proven ? '' : `<p class="note">There were too many possible plans to check them all, so this is the best one I found${comp.length ? '; a slightly gentler set of compromises may exist' : ''}. The same menu always gives the same plan.</p>`);
   renderChart(r);
   const ev = events(r);
   let html = '', lastT = null;
@@ -353,22 +380,26 @@ function render(r) {
     html += `<li class="${e.cls}"><label><input type="checkbox"> <span>${e.text}</span></label></li>`;
   }
   if (lastT !== null) html += '</ul></li>';
+  const dropped = r.dishes.filter((d, i) => r.chosen[i].dropped).map((d) => esc(d.name));
+  if (dropped.length) html = `<li class="ev dropped"><time>–</time><ul><li><label><input type="checkbox"> <span><strong>Not in this plan:</strong> ${dropped.join(', ')}. Make ahead, or use another appliance.</span></label></li></ul></li>` + html;
   $('#steplist').innerHTML = html;
 }
 
 const KIND_CLASS = { oven: 'k-oven', hob: 'k-hob', prep: 'k-prep', rest: 'k-rest', other: 'k-other' };
 function renderChart(r) {
   const starts = [...r.sched.flat().map((x) => x.from), ...r.chosen.flatMap((o) => o.steps.map((s) => s.from))];
-  const t0 = Math.floor(Math.min(...starts) / 6) * 6; // to the half hour before
+  if (!starts.length) { $('#chart').innerHTML = ''; return; }
+  const t0 = Math.max(0, Math.min(...starts) - 3);
   const t1 = Math.max(...r.dishes.map((d) => d.serve)) + 1;
   const span = t1 - t0;
   const x = (t) => `${((t - t0) / span) * 100}%`;
   const w = (a, b) => `${((b - a) / span) * 100}%`;
   let ticks = '';
   const serveMin = toMin(menu.serve);
-  for (let t = t0; t <= t1; t++) {
-    const m = ((serveMin + (t - lastP.S) * 5) % 1440 + 1440) % 1440;
-    if (m % 30 === 0) ticks += `<span class="tick${m % 60 ? ' half' : ''}" style="left:${x(t)}">${m % 60 ? '' : `${Math.floor(m / 60)}:00`}</span>`;
+  const m0 = serveMin + (t0 - lastP.S) * 5, m1 = serveMin + (t1 - lastP.S) * 5;
+  for (let m = Math.ceil(m0 / 30) * 30; m <= m1; m += 30) {
+    const t = lastP.S + (m - serveMin) / 5, mm = ((m % 1440) + 1440) % 1440;
+    ticks += `<span class="tick${mm % 60 ? ' half' : ''}" style="left:${x(t)}">${mm % 60 ? '' : `${Math.floor(mm / 60)}:00`}</span>`;
   }
   let rows = '';
   r.sched.forEach((runs, o) => {

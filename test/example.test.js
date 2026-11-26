@@ -30,3 +30,27 @@ test('one cook never does two hands-on things at once in the example', () => {
   }));
   assert.ok(busy.size >= 6 + 3 + 2);
 });
+
+test('made-ahead pie is baked before its ready-by time, in the idle second oven', () => {
+  const menu = {
+    serve: '16:00', from: '08:00', ovens: [{ shelves: 3 }, { shelves: 1 }], rings: 4, cooks: 2,
+    dishes: [
+      { name: 'Turkey', steps: [{ kind: 'oven', min: 210, temp: 163, shelves: 2 }, { kind: 'rest', min: 30, max: 60 }] },
+      { name: 'Rolls', steps: [{ kind: 'oven', min: 15, temp: 204 }], hold: 0 },
+      { name: 'Pumpkin pie', readyBy: '12:00', exact: true, steps: [{ kind: 'oven', min: 15, temp: 218 }, { kind: 'oven', min: 45, temp: 177 }] },
+    ],
+  };
+  const r = solve(toProblem(menu), { nodeLimit: 60000 });
+  assert.ok(r.ok); assert.deepEqual(verify(r), []);
+  const i = r.active.findIndex((d) => d.name === 'Pumpkin pie');
+  const pie = r.best.chosen[i];
+  assert.ok(!pie.dropped);
+  assert.ok(pie.d <= r.P.S - 48, 'done by 12:00 (4 h before serving)');
+  assert.equal(pie.steps[0].oven, pie.steps[1].oven);
+  assert.equal(r.best.chosen.filter((o) => o.widen && o.widen.some((w) => w)).length, 0);
+});
+
+test('same menu, same plan (node limit, not time)', () => {
+  const a = solve(toProblem(EXAMPLE), { nodeLimit: 3000 }), b = solve(toProblem(EXAMPLE), { nodeLimit: 3000 });
+  assert.equal(JSON.stringify(a.best.chosen.map((o) => o.steps)), JSON.stringify(b.best.chosen.map((o) => o.steps)));
+});

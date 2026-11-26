@@ -38,7 +38,15 @@ export function toProblem(m) {
   if (before <= 0) before += 24 * 60;
   return {
     startBefore: before, ovens: m.ovens, rings: m.rings, cooks: m.cooks,
-    dishes: m.dishes.map((d) => ({ name: d.name, hold: d.hold ?? 0, serveAt: d.serveAt ?? 0, exact: !!d.exact, off: !!d.off,
-      steps: d.steps.map((s) => ({ ...s })) })),
+    dishes: m.dishes.map((d) => {
+      let serveAt = d.serveAt ?? 0, hold = d.hold ?? 0, holdWeight = 1;
+      if (d.readyBy) { // made ahead: ready by this clock time, done any time before (it keeps)
+        serveAt = toMin(d.readyBy) - toMin(m.serve);
+        if (serveAt > 0) serveAt -= 24 * 60;
+        hold = Math.max(0, before + serveAt);
+        holdWeight = 0.02;
+      }
+      return { name: d.name, hold, holdWeight, serveAt, exact: !!d.exact, off: !!d.off, steps: d.steps.map((s) => ({ ...s })) };
+    }),
   };
 }

@@ -9,7 +9,7 @@
 // of temperatures [lo, hi]; before it goes in, the oven must already have been inside that range for `preheat`
 // minutes. The hob has a number of rings. Steps marked `hands` need one cook for their whole duration.
 //
-// Feasibility of a full assignment is exact: shelves/rings/cooks are capacity sums per slot, and the oven
+// Feasibility of a full assignment (a start time for every step) is checked exactly: shelves/rings/cooks are capacity sums per slot, and the oven
 // temperature in a slot is free to be any value in the intersection of every range that constrains that slot
 // (occupants and preheaters), so a plan exists iff every slot's intersection is non-empty.
 
@@ -22,13 +22,13 @@ const slots = (min) => Math.ceil(Math.max(0, min) / SLOT);
 
 export function normalise(problem) {
   const p = problem;
-  const startBefore = slots(p.startBefore ?? 360); // kitchen free this many minutes before serving
+  const startBefore = Math.floor(Math.max(0, p.startBefore ?? 360) / SLOT); // kitchen free this many minutes before serving
   const ovens = (p.ovens ?? [{ name: 'Oven', shelves: 3 }]).map((o, i) => ({
     name: o.name ?? `Oven ${i + 1}`, shelves: o.shelves ?? 3, preheat: slots(o.preheat ?? 15),
   }));
   const S = startBefore;
   const dishes = p.dishes.map((d, di) => {
-    const serve = S + Math.round((d.serveAt ?? 0) / SLOT);
+    const serve = Math.max(0, S + Math.floor((d.serveAt ?? 0) / SLOT));
     const steps = d.steps.map((s) => {
       const kind = s.kind ?? 'other';
       const len = slots(s.min);
@@ -45,7 +45,8 @@ export function normalise(problem) {
       return st;
     }).filter((s) => s.len > 0);
     const soft = p.soft !== false;
-    return { index: di, name: d.name ?? `Dish ${di + 1}`, serve, hold: slots(d.hold ?? 0), steps, weight: d.weight ?? 1,
+    return { index: di, name: d.name ?? `Dish ${di + 1}`, serve, hold: Math.min(serve, slots(d.hold ?? 0)), steps, weight: d.weight ?? 1,
+      holdWeight: d.holdWeight ?? 1,
       off: !!d.off, extraHold: soft ? slots(45) : 0, widen: soft && d.exact !== true ? [0, 10, 20] : [0],
       canDrop: soft };
   });
@@ -56,49 +57,56 @@ export function normalise(problem) {
 // Prices of compromises (in the same units as "one dish waits 5 more minutes" = 1).
 export const PRICE = { extraWait: 4, widen: { 10: 6, 20: 15 }, drop: 60 };
 function holdCost(dish, h) {
-  return dish.weight * (h <= dish.hold ? h : dish.hold + PRICE.extraWait * (h - dish.hold));
+  return dish.weight * (h <= dish.hold ? h * dish.holdWeight : dish.hold * dish.holdWeight + PRICE.extraWait * (h - dish.hold));
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // Options: every way to place one dish. An option is { cost, d, steps:[{from,to,oven}], uses:[...] }.
 // A use is { r: resource key, from, to, n, lo, hi }  (lo/hi only for oven temperature constraints).
 
-const MAX_OPTIONS = 4000;
+const MAX_OPTIONS = 6000;
+
+// Values lo..hi: all of them when there are few; otherwise every value near lo plus an even spread to hi.
+// `sampled` is set when not every value is included (then the search can no longer claim to be exhaustive).
+function spread(lo, hi, info) {
+  const out = [];
+  if (hi - lo <= 12) { for (let k = lo; k <= hi; k++) out.push(k); return out; }
+  info.sampled = true;
+  for (let k = lo; k <= lo + 6; k++) out.push(k);
+  const step = Math.ceil((hi - lo - 6) / 8);
+  for (let k = lo + 6 + step; k < hi; k += step) out.push(k);
+  out.push(hi);
+  return out;
+}
 
 export function dishOptions(P, dish) {
   const out = [];
   const nSteps = dish.steps.length;
   const ovenSteps = dish.steps.map((s, i) => (s.kind === 'oven' ? i : -1)).filter((i) => i >= 0);
-  // enumerate done slot, waits (coarsened if too many combos), oven choices
-  const waitChoices = dish.steps.map((s, i) => {
-    if (i === nSteps - 1 || s.wait === 0) return [0];
-    const w = []; const stepW = Math.max(1, Math.ceil((s.wait + 1) / 7));
-    for (let k = 0; k <= s.wait; k += stepW) w.push(k);
-    if (w[w.length - 1] !== s.wait) w.push(s.wait);
-    return w;
-  });
-  const lenChoices = dish.steps.map((s) => {
-    if (s.maxLen === s.len) return [s.len];
-    const w = []; const st = Math.max(1, Math.ceil((s.maxLen - s.len + 1) / 7));
-    for (let k = s.len; k <= s.maxLen; k += st) w.push(k);
-    if (w[w.length - 1] !== s.maxLen) w.push(s.maxLen);
-    return w;
-  });
-  const ovenChoices = ovenSteps.map((i) => dish.steps[i].ovens ?? P.ovens.map((_, k) => k));
-  for (let h = 0; h <= dish.hold + dish.extraHold; h++) {
+  // enumerate done slot, waits, flexible lengths, oven choice (long ranges are sampled, see spread())
+  const info = { sampled: false, truncated: false };
+  const waitChoices = dish.steps.map((s, i) => (i === nSteps - 1 || s.wait === 0 ? [0] : spread(0, s.wait, info)));
+  const lenChoices = dish.steps.map((s) => (s.maxLen === s.len ? [s.len] : spread(s.len, s.maxLen, info)));
+  const hChoices = spread(0, dish.hold + dish.extraHold, info);
+  if (dish.extraHold && dish.hold + dish.extraHold > 12 && !hChoices.includes(dish.hold)) { hChoices.push(dish.hold); hChoices.sort((a, b) => a - b); }
+  const perH = Math.max(60, Math.floor(MAX_OPTIONS / hChoices.length));
+  // a dish stays in one oven (nobody wants to carry a half-baked pie across the kitchen)
+  const allowed = P.ovens.map((_, k) => k).filter((k) => ovenSteps.every((i) => !dish.steps[i].ovens || dish.steps[i].ovens.includes(k)));
+  const ovenChoices = ovenSteps.length ? [allowed] : [];
+  for (const h of hChoices) {
     const d = dish.serve - h;
+    const cap = out.length + perH;
     const waits = new Array(nSteps).fill(0);
     const lens = dish.steps.map((s) => s.len);
     const recL = (i) => { // choose lengths of flexible steps
       if (i < 0) { rec(nSteps - 2); return; }
-      for (const l of lenChoices[i]) { lens[i] = l; recL(i - 1); if (out.length >= MAX_OPTIONS) return; }
+      for (const l of lenChoices[i]) { lens[i] = l; recL(i - 1); if (out.length >= cap) { info.truncated = true; return; } }
     };
     const rec = (i) => { // choose waits for steps i..0 backwards (wait after step i-1)
       if (i < 0) { placeOvens(d, h, waits.slice(), lens.slice()); return; }
-      for (const w of waitChoices[i]) { waits[i] = w; rec(i - 1); if (out.length >= MAX_OPTIONS) return; }
+      for (const w of waitChoices[i]) { waits[i] = w; rec(i - 1); if (out.length >= cap) { info.truncated = true; return; } }
     };
     recL(nSteps - 1);
-    if (out.length >= MAX_OPTIONS) break;
   }
   function placeOvens(d, h, waits, lens) {
     // times backwards from d
@@ -117,7 +125,7 @@ export function dishOptions(P, dish) {
     const widens = cartesian(ovenSteps.map(() => dish.widen));
     for (const combo of combos) for (const wid of widens) {
       const steps = times.map((x) => ({ ...x, oven: -1 }));
-      ovenSteps.forEach((si, k) => { steps[si].oven = combo[k]; });
+      ovenSteps.forEach((si) => { steps[si].oven = combo[0]; });
       const uses = [];
       const ranges = dish.steps.map(() => null);
       let ok = true, wcost = 0;
@@ -145,11 +153,11 @@ export function dishOptions(P, dish) {
       });
       if (!ok) continue;
       out.push({ cost: base + wcost, d, h, steps, uses, ranges, widen: wid });
-      if (out.length >= MAX_OPTIONS) return;
     }
   }
   if (dish.canDrop) out.push({ cost: PRICE.drop * dish.weight, dropped: true, d: null, h: 0, steps: [], uses: [], ranges: [] });
   out.sort((a, b) => a.cost - b.cost);
+  out.info = info;
   return out;
 }
 
@@ -240,7 +248,7 @@ export function tempSchedule(P, state, chosen) {
     let cur = null;
     for (let t = 0; t < P.end; t++) {
       if (lo[t] === -Infinity && hi[t] === Infinity) continue; // unconstrained
-      if (cur && Math.max(cur.lo, lo[t]) <= Math.min(cur.hi, hi[t])) {
+      if (cur && t - cur.to <= slots(30) && Math.max(cur.lo, lo[t]) <= Math.min(cur.hi, hi[t])) {
         cur.lo = Math.max(cur.lo, lo[t]); cur.hi = Math.min(cur.hi, hi[t]); cur.to = t + 1;
       } else {
         cur = { from: t, to: t + 1, lo: lo[t], hi: hi[t] }; runs.push(cur);
@@ -295,6 +303,7 @@ export function solve(problem, { nodeLimit = 1e9, timeMs = Infinity } = {}) {
   let best = null, bestCost = Infinity, nodes = 0, exhausted = true;
   const chosen = new Array(n).fill(null);
   const t0 = Date.now();
+  const complete = raw.every((l) => !l.info.sampled && !l.info.truncated);
   if (lists.some((l) => l.length === 0)) return finish();
   const firstFit = new Int32Array(n); // scratch: index of cheapest option that fits now
 
@@ -336,7 +345,7 @@ export function solve(problem, { nodeLimit = 1e9, timeMs = Infinity } = {}) {
 
   function finish() {
     if (best) best.why = explainDrops(P, active, raw, best);
-    return { P, active, ok: !!best, best, nodes, proven: exhausted, ms: Date.now() - t0,
+    return { P, active, ok: !!best, best, nodes, proven: exhausted && complete, ms: Date.now() - t0,
       emptyDishes: lists.map((l, i) => (l.length ? null : active[i].name)).filter(Boolean) };
   }
 }
@@ -377,6 +386,8 @@ export function verify(result) {
   best.chosen.forEach((opt, i) => {
     const dish = active[i];
     if (opt.dropped) return;
+    const ovensUsed = new Set(opt.steps.filter((st, k) => dish.steps[k].kind === 'oven').map((st) => st.oven));
+    if (ovensUsed.size > 1) errs.push(`${dish.name}: moves between ovens`);
     if (opt.d < dish.serve - dish.hold - dish.extraHold) errs.push(`${dish.name}: waits too long`);
     if (opt.d > dish.serve) errs.push(`${dish.name}: done at ${opt.d}, serve ${dish.serve}`);
     opt.steps.forEach((st, k) => {
@@ -485,7 +496,12 @@ function explainDrops(P, active, lists, best) {
   best.chosen.forEach((o, i) => {
     if (!o.dropped) return;
     const pref = lists[i].filter((x) => !x.dropped && x.widen.every((w) => !w)).sort((a, b) => a.h - b.h || a.cost - b.cost)[0];
-    if (!pref) { why[i] = { kind: 'start' }; return; }
+    if (!pref) {
+      const d = active[i];
+      const span = d.steps.reduce((a, s) => a + s.len, 0);
+      why[i] = { kind: span <= d.serve && d.steps.some((s) => s.kind === 'oven') ? 'preheat' : 'start' };
+      return;
+    }
     const c = state.compile(pref);
     if (!c) { // conflicts with itself: needs more of something than the kitchen has
       const d = active[i];

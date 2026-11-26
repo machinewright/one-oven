@@ -2,10 +2,10 @@
 import { solve } from './src/plan.js';
 
 self.onmessage = (e) => {
-  const { id, problem, timeMs } = e.data;
+  const { id, problem, timeMs, nodeLimit } = e.data;
   let out;
   try {
-    const r = solve(problem, { timeMs });
+    const r = solve(problem, { timeMs, nodeLimit });
     out = {
       ok: r.ok, proven: r.proven, ms: r.ms, nodes: r.nodes,
       P: { S: r.P.S, end: r.P.end, ovens: r.P.ovens },

@@ -38,7 +38,8 @@ Anthropic) · November 2026 · <a href="#how">How it plans</a></p>
     <label class="chk"><input id="second" type="checkbox"> I have a second oven</label>
     <label id="shelves2wrap" class="fld" hidden>its shelves <input id="shelves2" type="number" min="1" max="6" inputmode="numeric"></label>
   </div>
-  <p class="note">Shelves means how many trays fit at once. Use your recipes' temperatures for one kind of oven
+  <p class="note">Oven shelves means how many trays fit at once; for each oven step you say how many it takes up (a
+  tall roasting tin can block two). Use your recipes' temperatures for one kind of oven
   throughout: fan settings are lower than conventional ones, so don't mix them.</p>
 
   <h3 id="h-dishes">Your dishes</h3>
@@ -72,9 +73,13 @@ Anthropic) · November 2026 · <a href="#how">How it plans</a></p>
 <section id="how" class="prose">
 <h2>How it plans</h2>
 <p>An oven can only be at one temperature, and before a dish goes in it should have been at the right heat for a
-while (I assume 15 minutes). Shelves, hob rings and the cook's hands are limited too. The planner counts the day in
-five-minute steps and tries the possible start times for every dish. Among all the plans that respect those limits
-it picks the one where food waits the least after it's done and the oven changes temperature the fewest times.</p>
+while (I assume 15 minutes). A dish that is already in when the temperature changes is assumed to be fine at both
+temperatures (the planner only does that within what you allowed, or as a listed compromise), and a dish stays in
+one oven from start to finish. Shelves, hob rings and the cook's hands are limited too. The planner counts the day in
+five-minute steps and tries start times for every dish. Among the plans that respect those limits it picks the one
+where food waits the least after it's done and the oven changes temperature the fewest times. For a small menu it
+checks every possibility; for a big one it searches for a fixed amount of work and says so under the plan (the same
+menu always gives the same plan).</p>
 <p>When nothing fits as written, it doesn't just give up. It's allowed three kinds of compromise, each with a price:
 letting a dish wait longer than you said, cooking it up to 20&nbsp;°C off its recipe temperature, or leaving it out
 (to make ahead, or to cook in the microwave or air fryer). It picks the plan with the smallest total price and
