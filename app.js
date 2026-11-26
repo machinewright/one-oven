@@ -284,6 +284,8 @@ function whyText(w) {
   if (w.kind === 'temp') return `To be ready on time it needs ${ovenName(w.oven)} at ${showT(w.need)} from ${at} (counting the heating up), but ${them} need it at another temperature then. `;
   if (w.kind === 'hob') return `To be ready on time it needs a hob ring from ${at}, but they're all taken (${them}). `;
   if (w.kind === 'hands') return `To be ready on time it needs you from ${at}, but you're busy with ${them}. `;
+  if (w.kind === 'hob' && w.t === undefined) return 'It needs more hob rings than you have. ';
+  if (w.kind === 'shelves-total') return 'It needs more shelves than your oven has. ';
   if (w.kind === 'start') return 'It takes longer than the time between “kitchen free from” and serving. ';
   return '';
 }

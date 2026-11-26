@@ -289,7 +289,8 @@ export function solve(problem, { nodeLimit = 1e9, timeMs = Infinity } = {}) {
   const P = normalise(problem);
   const active = P.dishes.filter((d) => !d.off && d.steps.length);
   const state = new State(P);
-  const lists = active.map((d) => dishOptions(P, d).filter((o) => state.selfFits(o)));
+  const raw = active.map((d) => dishOptions(P, d));
+  const lists = raw.map((l) => l.filter((o) => state.selfFits(o)));
   const n = active.length;
   let best = null, bestCost = Infinity, nodes = 0, exhausted = true;
   const chosen = new Array(n).fill(null);
@@ -334,7 +335,7 @@ export function solve(problem, { nodeLimit = 1e9, timeMs = Infinity } = {}) {
   return finish();
 
   function finish() {
-    if (best) best.why = explainDrops(P, active, lists, best);
+    if (best) best.why = explainDrops(P, active, raw, best);
     return { P, active, ok: !!best, best, nodes, proven: exhausted, ms: Date.now() - t0,
       emptyDishes: lists.map((l, i) => (l.length ? null : active[i].name)).filter(Boolean) };
   }
@@ -486,7 +487,13 @@ function explainDrops(P, active, lists, best) {
     const pref = lists[i].filter((x) => !x.dropped && x.widen.every((w) => !w)).sort((a, b) => a.h - b.h || a.cost - b.cost)[0];
     if (!pref) { why[i] = { kind: 'start' }; return; }
     const c = state.compile(pref);
-    if (!c) { why[i] = { kind: 'self' }; return; }
+    if (!c) { // conflicts with itself: needs more of something than the kitchen has
+      const d = active[i];
+      const kind = d.steps.some((s) => s.kind === 'hob' && s.rings > P.rings) ? 'hob'
+        : d.steps.some((s) => s.kind === 'oven' && s.shelves > Math.max(...P.ovens.map((o) => o.shelves))) ? 'shelves-total'
+          : d.steps.some((s) => s.hands) && P.cooks < 1 ? 'hands' : 'self';
+      why[i] = { kind, users: [] }; return;
+    }
     let first = null;
     for (let j = 0; j < c.idx.length; j++) {
       const k = c.idx[j], r = Math.floor(k / state.T), t = k % state.T;
