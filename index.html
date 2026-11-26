@@ -26,7 +26,8 @@ Anthropic) · November 2026 · <a href="#how">How it plans</a></p>
 
 <noscript><p class="bad">The planner needs JavaScript.</p></noscript>
 
-<section class="widget no-print" aria-labelledby="h-kitchen">
+<section class="widget no-print" aria-labelledby="h-menu">
+  <h2 id="h-menu" class="sr-only">Your kitchen and dishes</h2>
   <h3 id="h-kitchen">Your kitchen</h3>
   <div class="grid">
     <label>Serve at <input id="serve" type="time" step="300" required></label>
@@ -55,8 +56,9 @@ Anthropic) · November 2026 · <a href="#how">How it plans</a></p>
 </section>
 
 <section class="plan" aria-labelledby="h-plan">
-  <h2 id="h-plan">Your plan <span id="status" class="note" aria-live="polite"></span></h2>
-  <div id="verdict" aria-live="polite"></div>
+  <h2 id="h-plan">Your plan <span id="status" class="note"></span></h2>
+  <p id="announce" class="sr-only" aria-live="polite"></p>
+  <div id="verdict"></div>
   <div id="chart" class="chart" aria-hidden="true"></div>
   <div class="legend no-print" aria-hidden="true">
     <span><i class="k-oven"></i>oven</span><span><i class="k-hob"></i>hob</span><span><i class="k-prep"></i>needs you</span>

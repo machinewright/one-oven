@@ -261,7 +261,7 @@ worker.onmessage = (e) => {
   const r = e.data.result;
   $('#status').textContent = '';
   $('.plan').classList.remove('stale');
-  if (r.error) { $('#verdict').innerHTML = `<p class="bad">Something went wrong: ${esc(r.error)}</p>`; return; }
+  if (r.error) { say('Something went wrong.'); $('#verdict').innerHTML = `<p class="bad">Something went wrong: ${esc(r.error)}</p>`; return; }
   render(r, snapshot);
 };
 
@@ -362,10 +362,12 @@ function events(r) {
   return ev;
 }
 
+let lastSaid = '';
+function say(t) { if (t !== lastSaid) { lastSaid = t; $('#announce').textContent = t; } }
 function render(r, snap) {
   lastP = r.P;
-  if (!r.dishes.length) { $('#verdict').innerHTML = '<p>Add a dish to get a plan.</p>'; $('#chart').innerHTML = ''; $('#steplist').innerHTML = ''; return; }
-  if (!r.chosen) { $('#verdict').innerHTML = '<p class="bad">No plan found. Check that the kitchen opens early enough for the longest dish.</p>'; $('#chart').innerHTML = ''; $('#steplist').innerHTML = ''; return; }
+  if (!r.dishes.length) { say(''); $('#verdict').innerHTML = '<p>Add a dish to get a plan.</p>'; $('#chart').innerHTML = ''; $('#steplist').innerHTML = ''; return; }
+  if (!r.chosen) { say('No plan found.'); $('#verdict').innerHTML = '<p class="bad">No plan found. Check that the kitchen opens early enough for the longest dish.</p>'; $('#chart').innerHTML = ''; $('#steplist').innerHTML = ''; return; }
   const comp = compromises(r, snap);
   const firstOn = Math.min(...r.sched.flat().map((x) => x.from), Infinity);
   const changes = r.sched.reduce((a, runs) => a + Math.max(0, runs.length - 1), 0);
@@ -373,6 +375,7 @@ function render(r, snap) {
   const head = comp.length
     ? `<p class="verdict warn">It doesn't all fit as written. The plan below needs ${comp.length === 1 ? 'one compromise' : comp.length + ' compromises'}:</p><ul class="comp">${comp.map((c) => `<li>${c}</li>`).join('')}</ul>${snap.dishes.some((d) => d.top) ? '' : '<p class="note">Care more about one dish than the others? Open it and tick “matters most”.</p>'}`
     : `<p class="verdict good">Everything fits, as written.</p>`;
+  say(`Plan updated: ${comp.length ? (comp.length === 1 ? 'needs one compromise' : `needs ${comp.length} compromises`) : 'everything fits'}${Number.isFinite(allStart) ? `, start at ${clock(allStart)}` : ''}.`);
   const facts = Number.isFinite(allStart) ? [`Start at <strong>${clock(allStart)}</strong>`] : [];
   if (Number.isFinite(firstOn)) facts.push(`oven on at <strong>${clock(firstOn)}</strong>`, changes ? `${changes} temperature change${changes > 1 ? 's' : ''}` : 'one temperature all day');
   $('#verdict').innerHTML = head + (facts.length ? `<p class="facts">${facts.join(' · ')}</p>` : '') +

@@ -142,3 +142,5 @@ button.link { border: none; background: none; padding: 4px 0; color: #1e5b9c; }
 .steplist > li.ev.dropped time { color: #a3271f; }
 input[type=time] { min-width: 7.5em; }
 @media (max-width: 600px) { .chartin { min-width: 0; padding-right: 14px; } .cname { flex-basis: 92px; font-size: 12px; } .tick.half { display: none; } }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
