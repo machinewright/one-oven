@@ -437,7 +437,21 @@ function renderChart(r) {
   });
   const serveLines = [...new Set(r.dishes.map((d) => d.serve))].map((t) => `<span class="serveline" style="left:${x(t)}"></span>`).join('');
   $('#chart').innerHTML = `<div class="chartin"><div class="crow axis"><div class="cname"></div><div class="ctrack">${ticks}</div></div>${rows}<div class="crow overlay"><div class="cname"></div><div class="ctrack">${serveLines}</div></div></div>`;
+  fitTempLabels();
 }
+
+// A short oven run can be too narrow for "220°C": show "220", or nothing (the tooltip and step list still say it).
+function fitTempLabels() {
+  for (const el of document.querySelectorAll('#chart .k-temp')) {
+    const full = el.dataset.t || (el.dataset.t = el.textContent);
+    el.textContent = full;
+    if (el.scrollWidth > el.clientWidth) el.textContent = full.replace(/°.*/, '');
+    if (el.scrollWidth > el.clientWidth) el.textContent = '';
+  }
+}
+addEventListener('resize', fitTempLabels);
+addEventListener('beforeprint', fitTempLabels);
+addEventListener('afterprint', fitTempLabels);
 
 // ---------------------------------------------------------------------------------------------------------------
 
