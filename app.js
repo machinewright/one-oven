@@ -216,6 +216,13 @@ function bindDishes() {
     else return;
     renderDishes(); changed(0);
     if (b.classList.contains('f-add')) $(`.dish[data-i="${i}"] .step:last-child .f-kind`)?.focus();
+    else {
+      // Keep keyboard focus near where it was: the step that moved up (or the one before), else the next dish, else "Add a dish".
+      const card = menu.dishes.includes(d) ? $(`.dish[data-i="${i}"]`) : null;
+      const steps = card ? card.querySelectorAll('.step .f-del') : [];
+      const next = card ? steps[Math.min(k, steps.length - 1)] : $(`.dish[data-i="${Math.min(i, menu.dishes.length - 1)}"] summary`);
+      (next || $('#adddish')).focus();
+    }
   });
   $('#adddish').addEventListener('click', () => {
     menu.dishes.push({ name: 'New dish', hold: 10, steps: [{ kind: 'oven', min: 30, temp: 180, shelves: 1 }] });
